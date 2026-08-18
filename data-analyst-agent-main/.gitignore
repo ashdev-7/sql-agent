@@ -1,0 +1,39 @@
+# Environment & secrets
+.env
+*.env
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Data files 
+data/raw/
+data/output/
+data/sample/
+*.csv
+*.parquet
+*.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+get-pip.py

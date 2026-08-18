@@ -1,0 +1,23 @@
+[project]
+name = "data-analyst-agent"
+version = "0.1.0"
+description = "AI agent for data analysis - Data Engineer intern project"
+requires-python = ">=3.11"
+dependencies = [
+    "langchain>=0.3.0",
+    "langchain-groq>=0.2.0",
+    "langchain-community>=0.3.0",
+    "duckdb>=1.1.0",
+    "pandas>=2.2.0",
+    "python-dotenv>=1.0.0",
+    "rich>=13.0.0",
+    "tenacity"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.6.0",
+]
