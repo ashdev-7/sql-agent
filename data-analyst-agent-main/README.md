@@ -16,7 +16,7 @@ You:   Total revenue by city?
 Agent: Danang 2.4B  |  Hanoi 3.0B  |  HCMC 5.7B
 ```
 
-If AWS credentials are set (see **Configuration**), the agent automatically switches to the **SmartCity pipeline** dataset (vehicle, weather, emergency data on S3) instead of the local sales table — same interface, no code change needed:
+If AWS credentials are set (see [Configuration](https://github.com/ashdev-7/sql-agent/blob/main/data-analyst-agent-main/README.md#configuration)), the agent automatically switches to the **SmartCity pipeline** dataset (vehicle, weather, emergency data on S3) instead of the local sales table — same interface, no code change needed:
 
 ```text
 You:   What is the average speed of electric vehicles today?
@@ -67,8 +67,8 @@ data-analyst-agent/
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/minnobug/data-analyst-agent.git
-cd data-analyst-agent
+git clone https://github.com/ashdev-7/sql-agent.git
+cd data-analyst-agent-main
 pip install -e .
 ```
 
@@ -85,7 +85,7 @@ GROQ_MODEL=llama-3.3-70b-versatile
 LOG_LEVEL=INFO
 ```
 
-Leave `AWS_ACCESS_KEY` / `AWS_SECRET_KEY` / `AWS_BUCKET_NAME` unset to run in local mode (sample sales data, auto-seeded). Fill them in to point the agent at the SmartCity S3 pipeline instead — see **Configuration**.
+Leave `AWS_ACCESS_KEY` / `AWS_SECRET_KEY` / `AWS_BUCKET_NAME` unset to run in local mode (sample sales data, auto-seeded). Fill them in to point the agent at the SmartCity S3 pipeline instead — see [Configuration](https://github.com/ashdev-7/sql-agent/blob/main/data-analyst-agent-main/README.md#configuration).
 
 ### 3. Run
 
@@ -136,3 +136,7 @@ When all three AWS vars are present, the agent connects via DuckDB's `httpfs` ex
 * Streamlit web UI
 
 ---
+
+## License
+
+MIT — see [LICENSE](https://github.com/ashdev-7/sql-agent/blob/main/data-analyst-agent-main/LICENSE).
