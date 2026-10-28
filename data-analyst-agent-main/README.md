@@ -9,14 +9,14 @@ AI agent that answers questions about your data in plain English — no SQL know
 Ask questions in natural language → agent writes and runs SQL → returns the answer.
 
 ```text
-You:   Which product sells the most?
-Agent: Phone — 75 units sold across all cities.
+You:   Which vehicle had the highest speed and what car is it?
+Agent: VH-001, a Tesla Model Y, at 95.2 km/h on 2024-03-15.
 
-You:   Total revenue by city?
-Agent: Danang 2.4B  |  Hanoi 3.0B  |  HCMC 5.7B
+You:   What was the weather when the accident happened?
+Agent: 31.8 °C, cloudy, 2.1 mm of rain, 82 % humidity, moderate air quality.
 ```
 
-If AWS credentials are set (see [Configuration](https://github.com/ashdev-7/sql-agent/blob/main/data-analyst-agent-main/README.md#configuration)), the agent automatically switches to the **SmartCity pipeline** dataset (vehicle, weather, emergency data on S3) instead of the local sales table — same interface, no code change needed:
+If AWS credentials are set (see [Configuration](https://github.com/ashdev-7/sql-agent/blob/main/data-analyst-agent-main/README.md#configuration)), the agent automatically switches to the **SmartCity pipeline** dataset (vehicle, weather, emergency data on S3) instead of the local sample warehouse — same interface, no code change needed:
 
 ```text
 You:   What is the average speed of electric vehicles today?
@@ -29,7 +29,7 @@ Agent: 78.3 km/h average across today's electric vehicle trips (date=2026-06-17)
 
 | Layer              | Tool                                 |
 | ------------------ | ------------------------------------ |
-| LLM                | Groq — Llama 3.3 70B                 |
+| LLM                | Groq — GPT-OSS 120B                  |
 | Agent framework    | LangChain                            |
 | Database           | DuckDB (local file or S3 via httpfs) |
 | CLI                | Rich                                 |
@@ -81,7 +81,7 @@ cp .env.example .env
 
 ```env
 GROQ_API_KEY=your_key_here
-GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_MODEL=openai/gpt-oss-120b
 LOG_LEVEL=INFO
 ```
 
@@ -112,7 +112,7 @@ pytest tests/ --cov=src --cov-report=term-missing
 | Env var           | Default                    | Description                                                         |
 | ----------------- | -------------------------- | ------------------------------------------------------------------- |
 | `GROQ_API_KEY`    | required                   | Groq API key                                                        |
-| `GROQ_MODEL`      | `llama-3.3-70b-versatile`  | Model to use                                                        |
+| `GROQ_MODEL`      | `openai/gpt-oss-120b`      | Model to use                                                        |
 | `WAREHOUSE_DB`    | `data/sample/warehouse.db` | Path to local DuckDB file (used when AWS vars below are not set)    |
 | `LOG_LEVEL`       | `INFO`                     | `DEBUG` / `INFO` / `WARNING`                                        |
 | `AWS_ACCESS_KEY`  | —                          | Enables SmartCity/S3 mode when set together with the two vars below |
@@ -120,7 +120,7 @@ pytest tests/ --cov=src --cov-report=term-missing
 | `AWS_BUCKET_NAME` | —                          | S3 bucket holding the SmartCity pipeline's `refined/` Parquet data  |
 | `AWS_REGION`      | `ap-southeast-1`           | AWS region for the bucket                                           |
 
-When all three AWS vars are present, the agent connects via DuckDB's `httpfs` extension to the SmartCity tables (`vehicle_data`, `gps_data`, `traffic_data`, `weather_data`, `emergency_data`) and falls back to the local warehouse automatically if the S3 data is missing or unreachable.
+When all three AWS vars are present, the agent connects via DuckDB's `httpfs` extension to the SmartCity tables (`vehicle_data`, `weather_data`, `emergency_data`) and falls back to the local warehouse automatically if the S3 data is missing or unreachable.
 
 ---
 

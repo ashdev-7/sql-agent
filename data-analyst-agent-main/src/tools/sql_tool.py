@@ -14,14 +14,12 @@ log = get_logger("sql_tool")
 
 # Default DB path when WAREHOUSE_DB env var is not set.
 _DEFAULT_DB_PATH: Path = (
-    Path(__file__).parent.parent / "data" / "sample" / "warehouse.db"
+    Path(__file__).parent.parent.parent / "data" / "sample" / "warehouse.db"
 )
 
 # Smart-city pipeline table names (S3 Parquet views)
 _SMARTCITY_TABLES = [
     "vehicle_data",
-    "gps_data",
-    "traffic_data",
     "weather_data",
     "emergency_data",
 ]
@@ -114,7 +112,7 @@ def _make_local_connection() -> "duckdb.DuckDBPyConnection":
 def _make_s3_connection() -> "duckdb.DuckDBPyConnection":
     """
     Open an in-memory DuckDB connection configured for S3 via httpfs,
-    then create views for all five smart-city Parquet tables.
+    then create views for all three smart-city Parquet tables.
 
     Path pattern note: transform_parquet.py writes with
     `.partitionBy("date").parquet(out)`, which produces Hive-style

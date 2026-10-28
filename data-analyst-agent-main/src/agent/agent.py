@@ -42,9 +42,9 @@ except ImportError:
 # System prompts
 
 _SYSTEM_PROMPT_SMARTCITY = """You are a Data Analyst assistant for the Smart City pipeline \
-(HCM → Vũng Tàu expressway). You analyze real-time IoT data using SQL.
+(San Francisco → San Jose expressway). You analyze real-time IoT data using SQL.
 
-DATABASE: SmartCity — 5 tables on S3 (Parquet, partitioned by date)
+DATABASE: SmartCity — 3 tables on S3 (Parquet, partitioned by date)
 
 TABLE SCHEMAS:
 1. vehicle_data
@@ -59,7 +59,7 @@ TABLE SCHEMAS:
 2. weather_data
    - id (VARCHAR), vehicle_id (VARCHAR)
    - timestamp (TIMESTAMP), date (VARCHAR)
-   - location (VARCHAR), temperature (DOUBLE) — Celsius, tropical range 25–38
+   - location (VARCHAR), temperature (DOUBLE) — Celsius, typical range 25–38
    - weatherCondition (VARCHAR) — 'Sunny', 'Cloudy', 'Rain', 'Stormy'
    - precipitation (DOUBLE), windSpeed (DOUBLE), humidity (INTEGER) — 60–95%
    - airQualityIndex (DOUBLE) — 0–200
@@ -73,18 +73,6 @@ TABLE SCHEMAS:
    - location (VARCHAR), description (VARCHAR)
    - is_active (BOOLEAN), is_real_incident (BOOLEAN) — false when type = 'None'
 
-4. gps_data
-   - id (VARCHAR), vehicle_id (VARCHAR)
-   - timestamp (TIMESTAMP), date (VARCHAR)
-   - speed (DOUBLE), direction (VARCHAR)
-   - vehicleType (VARCHAR) — e.g. 'private', 'bus'
-   - hour (INTEGER)
-
-5. traffic_data
-   - id (VARCHAR), vehicle_id (VARCHAR), camera_id (VARCHAR)
-   - timestamp (TIMESTAMP), date (VARCHAR)
-   - location (VARCHAR)
-
 QUERY RULES:
 - ALWAYS call list_tables first to confirm available columns before querying
 - The "date" column is a VARCHAR partition key in 'YYYY-MM-DD' format (e.g. '2026-06-17'),
@@ -92,7 +80,7 @@ QUERY RULES:
   silently fail or behave unpredictably across DuckDB versions.
   ALWAYS write: WHERE date = CAST(CURRENT_DATE AS VARCHAR)
   or, for a specific day: WHERE date = '2026-06-17'
-- If a query for "today" / "hôm nay" returns 0 rows, do NOT immediately conclude
+- If a query for "today" returns 0 rows, do NOT immediately conclude
   there is no data — re-run with WHERE date = (SELECT MAX(date) FROM <table>)
   to check the most recent available date, and tell the user which date you used.
 - For EV queries: WHERE is_ev = true  OR  WHERE fuelType = 'Electric'
@@ -102,32 +90,18 @@ QUERY RULES:
 - NEVER use columns that don't exist in the schema above
 - PREFER aggregate queries (COUNT, AVG, SUM, GROUP BY) over SELECT * — raw row
   dumps are expensive and get truncated by query_sql's row limit
-- Respond in the same language as the user (Vietnamese if user writes Vietnamese)
+- ALWAYS reply in English only, whatever language the user writes in
 - Format numbers clearly: use ROUND() for decimals, format large numbers readably"""
 
-_SYSTEM_PROMPT_LOCAL = """You are a Data Analyst assistant. \
-You analyze sales data using SQL on a local DuckDB database.
-
-DATABASE: Local warehouse — 1 table
-
-TABLE SCHEMA:
-1. sales
-   - month (VARCHAR) — e.g. '2024-01'
-   - city (VARCHAR) — 'Hanoi', 'HCMC', 'Danang'
-   - product (VARCHAR) — 'Laptop', 'Phone', 'Tablet'
-   - unit_price (INTEGER) — price per unit in VND
-   - quantity (INTEGER) — number of units sold
-   - Revenue = CAST(unit_price AS BIGINT) * quantity  ← NO revenue column, must calculate
-
-QUERY RULES:
-- ALWAYS call list_tables first before querying
-- Revenue MUST be: CAST(unit_price AS BIGINT) * quantity  (avoids INT32 overflow)
-- NEVER write: unit_price * quantity
-- Respond in the same language as the user (Vietnamese if user writes Vietnamese)"""
+# Local mode seeds the same SmartCity tables (main.py), so reuse that schema.
+_SYSTEM_PROMPT_LOCAL = _SYSTEM_PROMPT_SMARTCITY.replace(
+    "3 tables on S3 (Parquet, partitioned by date)",
+    "3 tables in a local DuckDB sample warehouse",
+)
 
 
 def _get_system_prompt() -> str:
-    """Chọn system prompt phù hợp với mode hiện tại."""
+    """Pick the system prompt for the current mode (S3 or local)."""
     has_aws = bool(
         os.getenv("AWS_ACCESS_KEY")
         and os.getenv("AWS_SECRET_KEY")
@@ -161,7 +135,7 @@ _is_rate_limit_error = _is_rate_limit
 
 
 def _extract_fallback_tool_call(error_str: str) -> tuple[str | None, dict | None]:
-    """Parse Groq XML-style tool call từ error string. Hỗ trợ có/không có quotes."""
+    """Parse a Groq XML-style tool call from an error string. Works with or without quotes."""
     match = re.search(r"'?<function=(\w+)\s*(\{.*?\})\s*</function>'?", error_str)
     if match:
         tool_name = match.group(1)
@@ -178,15 +152,15 @@ def _extract_fallback_tool_call(error_str: str) -> tuple[str | None, dict | None
 
 def create_analyst_agent(tools: list):
     """
-    Factory trả về closure run_agent(user_input) -> str.
+    Factory that returns a closure run_agent(user_input) -> str.
 
     Args:
-        tools: List LangChain tool objects. Thường là [query_sql, list_tables].
+        tools: List LangChain tool objects. Usually [query_sql, list_tables].
 
     Raises:
-        RuntimeError: nếu langchain-groq không khả dụng.
+        RuntimeError: if langchain-groq is not available.
     """
-    # Guard: kiểm tra langchain-groq có sẵn không
+    # Guard: check that langchain-groq is available
     if not _LANGCHAIN_AVAILABLE:
         raise RuntimeError(
             "langchain-groq is required but not available. "
@@ -194,12 +168,12 @@ def create_analyst_agent(tools: list):
         )
 
     system_prompt = _get_system_prompt()
-    mode = "SmartCity/S3" if "vehicle_data" in system_prompt else "Local/DuckDB"
+    mode = "SmartCity/S3" if system_prompt is _SYSTEM_PROMPT_SMARTCITY else "Local/DuckDB"
     log.info("Agent initialized in %s mode", mode)
     console.print(f"[dim]Agent mode: [cyan]{mode}[/cyan][/dim]")
 
     llm = ChatGroq(
-        model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+        model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
         temperature=0,
     ).bind_tools(tools, tool_choice="auto")
 
@@ -238,7 +212,7 @@ def create_analyst_agent(tools: list):
                 log.error(
                     "llm_retry_exhausted", extra={"req_id": req_id, "error": str(exc)}
                 )
-                return "Lỗi: Groq API rate limit, đã thử lại 3 lần. Vui lòng thử sau."
+                return "Error: Groq API rate limit hit, retried 3 times. Please try again later."
             except Exception as exc:
                 error_str = str(exc)
                 log.warning(
@@ -264,9 +238,9 @@ def create_analyst_agent(tools: list):
                         )
                         continue
                     except Exception as tool_exc:
-                        return f"Lỗi tool: {tool_exc}"
+                        return f"Tool error: {tool_exc}"
 
-                return f"Lỗi gọi API: {error_str}"
+                return f"API call error: {error_str}"
 
             messages.append(response)
 
@@ -281,10 +255,10 @@ def create_analyst_agent(tools: list):
                         "latency_ms": elapsed_ms,
                     },
                 )
-                # Trả fallback nếu content rỗng
+                # Return a fallback if content is empty
                 content = response.content
                 if not content or not content.strip():
-                    return "Xin lỗi, không có phản hồi từ model. Vui lòng thử lại."
+                    return "Sorry, the model returned no response. Please try again."
                 return content
 
             # Execute tool calls
@@ -328,7 +302,7 @@ def create_analyst_agent(tools: list):
                             },
                         )
                 else:
-                    result = f"Tool '{t_name}' không tồn tại."
+                    result = f"Tool '{t_name}' does not exist."
                     log.warning(
                         "unknown_tool", extra={"req_id": req_id, "tool": t_name}
                     )
@@ -340,6 +314,6 @@ def create_analyst_agent(tools: list):
             "max_iterations_reached",
             extra={"req_id": req_id, "latency_ms": elapsed_ms},
         )
-        return f"Không thể hoàn thành sau {MAX_STEPS} vòng."
+        return f"Could not finish within {MAX_STEPS} steps."
 
     return run_agent

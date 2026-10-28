@@ -12,7 +12,7 @@ from src.logging_config import get_logger, _JsonFormatter, _STDLIB_ATTRS
 
 
 class TestStdlibAttrs(unittest.TestCase):
-    """_STDLIB_ATTRS phải bao gồm các key chuẩn của LogRecord."""
+    """_STDLIB_ATTRS must include the standard LogRecord keys."""
 
     def test_contains_common_stdlib_keys(self):
         for key in (
@@ -30,14 +30,14 @@ class TestStdlibAttrs(unittest.TestCase):
             "process",
             "args",
         ):
-            self.assertIn(key, _STDLIB_ATTRS, f"'{key}' phải trong _STDLIB_ATTRS")
+            self.assertIn(key, _STDLIB_ATTRS, f"'{key}' must be in _STDLIB_ATTRS")
 
     def test_is_frozenset(self):
         self.assertIsInstance(_STDLIB_ATTRS, frozenset)
 
 
 class TestJsonFormatter(unittest.TestCase):
-    """_JsonFormatter output phải là valid JSON với đúng fields."""
+    """_JsonFormatter output must be valid JSON with the right fields."""
 
     def setUp(self):
         self.formatter = _JsonFormatter()
@@ -67,7 +67,7 @@ class TestJsonFormatter(unittest.TestCase):
         record = self._make_record("hello")
         data = json.loads(self.formatter.format(record))
         for field in ("ts", "level", "logger", "msg"):
-            self.assertIn(field, data, f"'{field}' phải có trong output")
+            self.assertIn(field, data, f"'{field}' must be in the output")
 
     def test_ts_format(self):
         record = self._make_record()
@@ -87,24 +87,24 @@ class TestJsonFormatter(unittest.TestCase):
         self.assertEqual(data["logger"], "test.logger")
 
     def test_extra_fields_extracted(self):
-        """Extra fields phải xuất hiện trong JSON output."""
+        """Extra fields must appear in the JSON output."""
         record = self._make_record(extra={"req_id": "abc123", "tool": "query_sql"})
         data = json.loads(self.formatter.format(record))
         self.assertEqual(data.get("req_id"), "abc123")
         self.assertEqual(data.get("tool"), "query_sql")
 
     def test_extra_fields_not_polluted_by_stdlib(self):
-        """Stdlib attrs như 'name', 'levelno' không được xuất hiện như extra."""
+        """Stdlib attrs such as 'name', 'levelno' must not appear as extras."""
         record = self._make_record()
         data = json.loads(self.formatter.format(record))
-        # levelno, lineno, thread, process không nên lẫn vào output
-        # (chúng nằm trong payload chỉ qua ts/level/logger/msg)
+        # levelno, lineno, thread, process must not leak into the output
+        # (they only reach the payload via ts/level/logger/msg)
         self.assertNotIn("levelno", data)
         self.assertNotIn("lineno", data)
         self.assertNotIn("threadName", data)
 
     def test_exc_info_included(self):
-        """Exception info phải được format và đưa vào field 'exc'."""
+        """Exception info must be formatted into the 'exc' field."""
         try:
             raise ValueError("test error")
         except ValueError:
@@ -125,21 +125,21 @@ class TestJsonFormatter(unittest.TestCase):
         self.assertIn("test error", data["exc"])
 
     def test_non_serializable_object_uses_str_fallback(self):
-        """Non-JSON-serializable extra phải dùng str() fallback."""
+        """A non-JSON-serializable extra must fall back to str()."""
         record = self._make_record(extra={"obj": object()})
-        # Không được raise exception
+        # Must not raise an exception
         output = self.formatter.format(record)
         data = json.loads(output)
-        # obj phải xuất hiện dưới dạng string
+        # obj must appear as a string
         self.assertIn("obj", data)
         self.assertIsInstance(data["obj"], str)
 
     def test_unicode_ensure_ascii_false(self):
-        """Tiếng Việt phải giữ nguyên, không escape thành \\uXXXX."""
-        record = self._make_record(msg="Xin chào thế giới")
+        """Non-ASCII text must be kept as-is, not escaped to \\uXXXX."""
+        record = self._make_record(msg="Café naïve – 東京")
         output = self.formatter.format(record)
-        self.assertIn("Xin chào thế giới", output)
-        # ensure_ascii=False → không có \\u escape
+        self.assertIn("Café naïve – 東京", output)
+        # ensure_ascii=False → no \\u escapes
         self.assertNotIn("\\u", output)
 
     def test_extra_int_and_float(self):
@@ -151,12 +151,12 @@ class TestJsonFormatter(unittest.TestCase):
     def test_no_extra_produces_clean_output(self):
         record = self._make_record("clean message")
         data = json.loads(self.formatter.format(record))
-        # Không có extra key nào ngoài 4 field chuẩn
+        # No extra keys beyond the 4 standard fields
         self.assertEqual(set(data.keys()), {"ts", "level", "logger", "msg"})
 
 
 class TestGetLogger(unittest.TestCase):
-    """get_logger phải idempotent và respect LOG_LEVEL."""
+    """get_logger must be idempotent and respect LOG_LEVEL."""
 
     def test_returns_logger_instance(self):
         logger = get_logger("test.module.a")
@@ -168,9 +168,9 @@ class TestGetLogger(unittest.TestCase):
         self.assertIs(l1, l2)
 
     def test_no_duplicate_handlers(self):
-        """Gọi nhiều lần → vẫn chỉ có 1 handler."""
+        """Repeated calls → still only 1 handler."""
         name = "test.module.c"
-        # Reset trước
+        # Reset first
         logging.getLogger(name).handlers.clear()
         get_logger(name)
         get_logger(name)
@@ -220,7 +220,7 @@ class TestGetLogger(unittest.TestCase):
         self.assertFalse(logger.propagate)
 
     def test_actual_log_output_is_json(self):
-        """Ghi log thật và capture output, kiểm tra là JSON hợp lệ."""
+        """Write a real log line, capture the output, check it is valid JSON."""
         name = "test.module.j"
         raw_logger = logging.getLogger(name)
         raw_logger.handlers.clear()
@@ -235,7 +235,7 @@ class TestGetLogger(unittest.TestCase):
         raw_logger.info("test message", extra={"req_id": "xyz", "step": 3})
 
         output = stream.getvalue().strip()
-        self.assertTrue(output, "Output phải có nội dung")
+        self.assertTrue(output, "Output must not be empty")
         data = json.loads(output)
         self.assertEqual(data["msg"], "test message")
         self.assertEqual(data["req_id"], "xyz")
@@ -243,7 +243,7 @@ class TestGetLogger(unittest.TestCase):
 
 
 class TestLoggerIntegration(unittest.TestCase):
-    """Integration test: logger dùng được trong agent context."""
+    """Integration test: the logger works in the agent context."""
 
     def test_multiple_loggers_independent(self):
         l1 = get_logger("agent")

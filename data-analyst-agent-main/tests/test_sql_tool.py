@@ -10,7 +10,7 @@ import pandas as pd
 def _make_mock_conn(
     tables: list[str] | None = None, describe_df: pd.DataFrame | None = None
 ):
-    """Tạo mock DuckDB connection với fetchdf() trả về data."""
+    """Build a mock DuckDB connection whose fetchdf() returns data."""
     conn = MagicMock()
 
     if tables is not None:
@@ -147,7 +147,7 @@ class TestSanitize:
 
     def test_dangerous_keyword_mid_query_rejected(self):
         sql = "SELECT * FROM sales WHERE name = 'DROP'"
-        # 'DROP' in string value — hiện tại regex sẽ catch nó
+        # 'DROP' inside a string value — the current regex still catches it
         # Test documents current behaviour
         ok, _, _ = self._sanitize(sql)
         assert ok is False  # conservative: block anyway
@@ -171,26 +171,26 @@ class TestMakeLocalConnection:
     def test_connects_when_db_exists(self, tmp_path, monkeypatch):
         db_path = tmp_path / "test.db"
 
-        # 1. Tạo file DB trước (dùng subprocess để tránh bị ảnh hưởng bởi mock)
+        # 1. Create the DB file first (in a subprocess so the mocks don't affect it)
         import subprocess, sys
 
         subprocess.run(
             [
                 sys.executable,
                 "-c",
-                f"import duckdb; c = duckdb.connect('{db_path}'); "
+                f"import duckdb; c = duckdb.connect({str(db_path)!r}); "
                 f"c.execute('CREATE TABLE test (id INTEGER)'); c.close()",
             ],
             check=True,
         )
 
-        # 2. Verify file tồn tại
+        # 2. Verify the file exists
         assert db_path.exists(), f"DB file not created: {db_path}"
 
         # 3. Set env
         monkeypatch.setenv("WAREHOUSE_DB", str(db_path))
 
-        # 4. Gọi trực tiếp
+        # 4. Call it directly
         from src.tools import sql_tool
 
         conn = sql_tool._make_local_connection()
@@ -251,7 +251,7 @@ class TestMakeS3Connection:
             assert "test-secret" in all_sql
             assert "ap-southeast-1" in all_sql
 
-    def test_creates_views_for_all_5_tables(self, monkeypatch):
+    def test_creates_views_for_all_3_tables(self, monkeypatch):
         import importlib
         import src.tools.sql_tool as m
 
@@ -269,7 +269,7 @@ class TestMakeS3Connection:
                 for c in mock_conn.execute.call_args_list
                 if "CREATE VIEW" in str(c)
             ]
-            assert len(view_calls) == 5
+            assert len(view_calls) == 3
             for table in m._SMARTCITY_TABLES:
                 assert any(table in c for c in view_calls)
 
@@ -479,11 +479,11 @@ class TestQuerySql:
         return ctx
 
     def test_returns_formatted_dataframe(self):
-        df = pd.DataFrame({"city": ["Hanoi", "HCMC"], "total": [100, 200]})
+        df = pd.DataFrame({"city": ["Boston", "Seattle"], "total": [100, 200]})
         with patch.object(self.m, "_get_connection", return_value=self._patch_conn(df)):
             result = self.m.query_sql.invoke({"sql": "SELECT city, total FROM sales"})
-        assert "Hanoi" in result
-        assert "HCMC" in result
+        assert "Boston" in result
+        assert "Seattle" in result
 
     def test_empty_result_message(self):
         df = pd.DataFrame()
@@ -562,18 +562,16 @@ class TestQuerySql:
 
 
 class TestSmartCityTablesConstant:
-    def test_has_five_tables(self):
+    def test_has_three_tables(self):
         from src.tools.sql_tool import _SMARTCITY_TABLES
 
-        assert len(_SMARTCITY_TABLES) == 5
+        assert len(_SMARTCITY_TABLES) == 3
 
     def test_contains_all_expected_tables(self):
         from src.tools.sql_tool import _SMARTCITY_TABLES
 
         expected = {
             "vehicle_data",
-            "gps_data",
-            "traffic_data",
             "weather_data",
             "emergency_data",
         }

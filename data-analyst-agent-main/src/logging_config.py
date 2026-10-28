@@ -3,7 +3,7 @@ import json
 import os
 import time
 
-# Keys chuẩn của logging.LogRecord — dùng để lọc ra extra của app
+# Standard logging.LogRecord keys — used to filter out the app's extra fields
 _STDLIB_ATTRS: frozenset = frozenset(
     logging.LogRecord("", 0, "", 0, "", (), None).__dict__.keys()
     | {"message", "asctime"}
@@ -12,15 +12,15 @@ _STDLIB_ATTRS: frozenset = frozenset(
 
 class _JsonFormatter(logging.Formatter):
     """
-    Format mỗi log record thành một dòng JSON.
+    Format each log record as a single JSON line.
 
-    Extra fields được truyền qua log.info("msg", extra={"key": "val"})
-    sẽ được merge thẳng vào record.__dict__ bởi Python logging —
-    formatter lọc ra bằng cách loại _STDLIB_ATTRS.
+    Extra fields passed via log.info("msg", extra={"key": "val"})
+    are merged straight into record.__dict__ by Python logging —
+    the formatter picks them out by excluding _STDLIB_ATTRS.
     """
 
     def format(self, record: logging.LogRecord) -> str:
-        # Gọi super để populate record.message, record.asctime, v.v.
+        # Call super to populate record.message, record.asctime, etc.
         record.message = record.getMessage()
 
         payload: dict = {
@@ -30,7 +30,7 @@ class _JsonFormatter(logging.Formatter):
             "msg": record.message,
         }
 
-        # Lọc extra fields: tất cả key trong __dict__ mà không phải stdlib attr
+        # Extra fields: every key in __dict__ that is not a stdlib attr
         app_extra = {k: v for k, v in record.__dict__.items() if k not in _STDLIB_ATTRS}
         if app_extra:
             payload.update(app_extra)
@@ -43,8 +43,8 @@ class _JsonFormatter(logging.Formatter):
 
 def get_logger(name: str) -> logging.Logger:
     """
-    Trả về logger với JSON formatter.
-    Idempotent: gọi nhiều lần cùng name → cùng instance, handler không bị thêm trùng.
+    Return a logger with the JSON formatter.
+    Idempotent: repeated calls with the same name → same instance, no duplicate handlers.
 
     Usage:
         log = get_logger("agent")
@@ -52,7 +52,7 @@ def get_logger(name: str) -> logging.Logger:
     """
     logger = logging.getLogger(name)
 
-    # Idempotent: chỉ setup lần đầu
+    # Idempotent: only set up the first time
     if not logger.handlers:
         handler = logging.StreamHandler()
         handler.setFormatter(_JsonFormatter())

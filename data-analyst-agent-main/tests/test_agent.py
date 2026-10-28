@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch, call
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Phải import conftest để stubs được đăng ký trước
+# conftest must be imported first so the stubs are registered
 import tests.conftest  # noqa: F401
 from tests.conftest import STUBS
 
@@ -17,7 +17,7 @@ ToolMessage = STUBS["ToolMessage"]
 
 
 def _make_response(content: str = "", tool_calls: list | None = None) -> MagicMock:
-    """Tạo mock giống AIMessage của LangChain."""
+    """Build a mock that looks like a LangChain AIMessage."""
     r = MagicMock()
     r.content = content
     r.tool_calls = tool_calls or []
@@ -37,10 +37,10 @@ def _make_tool(name: str, return_value: str = "ok") -> MagicMock:
 
 def _build_llm(responses: list) -> MagicMock:
     """
-    Tạo mock ChatGroq instance.
-    bind_tools() trả về chính nó.
-    invoke() lần lượt trả các items trong responses.
-    Nếu item là Exception instance → raise nó.
+    Build a mock ChatGroq instance.
+    bind_tools() returns itself.
+    invoke() returns the items in responses one by one.
+    If an item is an Exception instance → raise it.
     """
     llm = MagicMock()
     llm.bind_tools.return_value = llm
@@ -61,7 +61,7 @@ def _build_llm(responses: list) -> MagicMock:
 
 
 def _patch_groq(llm_mock):
-    """Context manager: patch ChatGroq và trả về llm_mock."""
+    """Context manager: patch ChatGroq and return llm_mock."""
     return patch("src.agent.agent.ChatGroq", return_value=llm_mock)
 
 
@@ -71,34 +71,34 @@ def _patch_groq(llm_mock):
 
 
 class TestDirectAnswer(unittest.TestCase):
-    """LLM trả lời ngay, không gọi tool."""
+    """LLM answers immediately without calling a tool."""
 
     def test_returns_llm_content(self):
-        llm = _build_llm([_make_response(content="Doanh thu Q1 là 5 tỷ.")])
+        llm = _build_llm([_make_response(content="Q1 revenue is 5 billion.")])
         with _patch_groq(llm):
             from src.agent.agent import create_analyst_agent
 
             agent = create_analyst_agent([])
-        result = agent("tổng doanh thu Q1?")
-        self.assertIn("5 tỷ", result)
+        result = agent("total Q1 revenue?")
+        self.assertIn("5 billion", result)
 
     def test_exact_content_returned(self):
-        llm = _build_llm([_make_response(content="Kết quả: 42")])
+        llm = _build_llm([_make_response(content="Result: 42")])
         with _patch_groq(llm):
             from src.agent.agent import create_analyst_agent
 
             agent = create_analyst_agent([])
-        result = agent("câu hỏi bất kỳ")
-        self.assertEqual(result, "Kết quả: 42")
+        result = agent("any question")
+        self.assertEqual(result, "Result: 42")
 
     def test_empty_tool_list_works(self):
-        llm = _build_llm([_make_response(content="Không có dữ liệu.")])
+        llm = _build_llm([_make_response(content="No data.")])
         with _patch_groq(llm):
             from src.agent.agent import create_analyst_agent
 
             agent = create_analyst_agent([])
-        result = agent("câu hỏi không cần tool")
-        self.assertEqual(result, "Không có dữ liệu.")
+        result = agent("question that needs no tool")
+        self.assertEqual(result, "No data.")
 
     def test_english_response_preserved(self):
         llm = _build_llm([_make_response(content="The answer is 100.")])
@@ -111,7 +111,7 @@ class TestDirectAnswer(unittest.TestCase):
 
 
 class TestEmptyContentResponse(unittest.TestCase):
-    """Groq quirk: trả content rỗng mà không có tool call."""
+    """Groq quirk: returns empty content with no tool call."""
 
     def test_empty_content_returns_fallback_message(self):
         llm = _build_llm([_make_response(content="", tool_calls=[])])
@@ -119,9 +119,9 @@ class TestEmptyContentResponse(unittest.TestCase):
             from src.agent.agent import create_analyst_agent
 
             agent = create_analyst_agent([])
-        result = agent("câu hỏi nào đó")
+        result = agent("some question")
         self.assertIsInstance(result, str)
-        self.assertTrue(result)  # không trả về string rỗng
+        self.assertTrue(result)  # must not return an empty string
 
     def test_whitespace_content_treated_as_empty(self):
         llm = _build_llm([_make_response(content="   \n  ", tool_calls=[])])
@@ -129,48 +129,48 @@ class TestEmptyContentResponse(unittest.TestCase):
             from src.agent.agent import create_analyst_agent
 
             agent = create_analyst_agent([])
-        result = agent("câu hỏi")
+        result = agent("question")
         self.assertIsInstance(result, str)
         self.assertTrue(result.strip())
 
 
 class TestToolCallFlow(unittest.TestCase):
-    """LLM gọi tool một hoặc nhiều lần."""
+    """LLM calls a tool one or more times."""
 
     def test_tool_invoked_with_correct_args(self):
-        tool = _make_tool("query_sql", return_value="city | revenue\nHanoi | 5000000")
+        tool = _make_tool("query_sql", return_value="city | revenue\nBoston | 5000000")
         tc = _make_tool_call("query_sql", {"sql": "SELECT city FROM sales"})
         llm = _build_llm(
             [
                 _make_response(tool_calls=[tc]),
-                _make_response(content="Hà Nội có doanh thu 5 triệu."),
+                _make_response(content="Boston revenue is 5 million."),
             ]
         )
         with _patch_groq(llm):
             from src.agent.agent import create_analyst_agent
 
             agent = create_analyst_agent([tool])
-        result = agent("doanh thu Hà Nội?")
+        result = agent("Boston revenue?")
         tool.invoke.assert_called_once_with({"sql": "SELECT city FROM sales"})
-        self.assertIn("5 triệu", result)
+        self.assertIn("5 million", result)
 
     def test_tool_result_included_in_next_llm_call(self):
-        """ToolMessage với kết quả phải được gửi lên LLM ở bước tiếp theo."""
+        """The ToolMessage with the result must be sent to the LLM on the next step."""
         tool = _make_tool("list_tables", return_value="Table 'sales': month, city")
         tc = _make_tool_call("list_tables", {}, call_id="tc_lt")
         llm = _build_llm(
             [
                 _make_response(tool_calls=[tc]),
-                _make_response(content="Có bảng sales với cột month, city."),
+                _make_response(content="There is a sales table with columns month, city."),
             ]
         )
         with _patch_groq(llm):
             from src.agent.agent import create_analyst_agent
 
             agent = create_analyst_agent([tool])
-        result = agent("có bảng nào?")
+        result = agent("which tables are there?")
 
-        # Lần invoke thứ 2 phải nhận ToolMessage trong messages
+        # The 2nd invoke must receive the ToolMessage in messages
         second_call_messages = llm.invoke.call_args_list[1][0][0]
         tool_msgs = [m for m in second_call_messages if isinstance(m, ToolMessage)]
         self.assertTrue(len(tool_msgs) > 0)
@@ -186,14 +186,14 @@ class TestToolCallFlow(unittest.TestCase):
         llm = _build_llm(
             [
                 _make_response(tool_calls=[tc_a, tc_b]),
-                _make_response(content="Có 6 bản ghi trong bảng sales."),
+                _make_response(content="The sales table has 6 rows."),
             ]
         )
         with _patch_groq(llm):
             from src.agent.agent import create_analyst_agent
 
             agent = create_analyst_agent([tool_a, tool_b])
-        result = agent("bao nhiêu dòng?")
+        result = agent("how many rows?")
         tool_a.invoke.assert_called_once()
         tool_b.invoke.assert_called_once()
         self.assertIn("6", result)
@@ -217,7 +217,7 @@ class TestToolCallFlow(unittest.TestCase):
         self.assertEqual(tool_msgs[0].tool_call_id, "my_call_id")
 
     def test_two_step_tool_calls(self):
-        """LLM gọi tool ở bước 1, gọi tool khác ở bước 2, rồi trả lời."""
+        """LLM calls a tool in step 1, another tool in step 2, then answers."""
         tool_a = _make_tool("list_tables", return_value="sales")
         tool_b = _make_tool("query_sql", return_value="total: 100")
         tc_a = _make_tool_call("list_tables", {})
@@ -226,39 +226,39 @@ class TestToolCallFlow(unittest.TestCase):
             [
                 _make_response(tool_calls=[tc_a]),
                 _make_response(tool_calls=[tc_b]),
-                _make_response(content="Tổng là 100."),
+                _make_response(content="The total is 100."),
             ]
         )
         with _patch_groq(llm):
             from src.agent.agent import create_analyst_agent
 
             agent = create_analyst_agent([tool_a, tool_b])
-        result = agent("tổng quantity?")
+        result = agent("total quantity?")
         self.assertIn("100", result)
         self.assertEqual(tool_a.invoke.call_count, 1)
         self.assertEqual(tool_b.invoke.call_count, 1)
 
 
 class TestUnknownTool(unittest.TestCase):
-    """LLM gọi tool không có trong tool_map."""
+    """LLM calls a tool that is not in tool_map."""
 
     def test_unknown_tool_does_not_raise(self):
         tc = _make_tool_call("ghost_tool", {})
         llm = _build_llm(
             [
                 _make_response(tool_calls=[tc]),
-                _make_response(content="Tool không tồn tại."),
+                _make_response(content="Tool does not exist."),
             ]
         )
         with _patch_groq(llm):
             from src.agent.agent import create_analyst_agent
 
             agent = create_analyst_agent([])
-        result = agent("gọi tool ma?")
+        result = agent("call a ghost tool?")
         self.assertIsInstance(result, str)
 
     def test_unknown_tool_error_in_tool_message(self):
-        """ToolMessage cho unknown tool phải chứa thông báo lỗi."""
+        """The ToolMessage for an unknown tool must contain an error message."""
         tc = _make_tool_call("ghost_tool", {}, call_id="tc_ghost")
         llm = _build_llm(
             [
@@ -277,22 +277,22 @@ class TestUnknownTool(unittest.TestCase):
 
 
 class TestMaxIterations(unittest.TestCase):
-    """Agent phải dừng sau MAX_STEPS vòng và trả fallback message."""
+    """Agent must stop after MAX_STEPS steps and return a fallback message."""
 
     def test_returns_fallback_after_max_steps(self):
         from src.agent.agent import MAX_STEPS
 
         tool = _make_tool("query_sql", return_value="ok")
         tc = _make_tool_call("query_sql", {"sql": "SELECT 1"})
-        # Đủ responses cho MAX_STEPS vòng (mỗi vòng 1 invoke)
+        # Enough responses for MAX_STEPS steps (one invoke per step)
         llm = _build_llm([_make_response(tool_calls=[tc])] * MAX_STEPS)
         with _patch_groq(llm):
             from src.agent.agent import create_analyst_agent
 
             agent = create_analyst_agent([tool])
-        result = agent("vòng lặp vô tận")
+        result = agent("infinite loop")
         self.assertIn(str(MAX_STEPS), result)
-        self.assertIn("vòng", result)
+        self.assertIn("steps", result)
 
     def test_tool_called_at_most_max_steps_times(self):
         from src.agent.agent import MAX_STEPS
@@ -308,11 +308,11 @@ class TestMaxIterations(unittest.TestCase):
         self.assertLessEqual(tool.invoke.call_count, MAX_STEPS)
 
     def test_fallback_message_contains_max_steps_constant(self):
-        """Fallback phải dùng MAX_STEPS constant, không hardcode số."""
+        """Fallback must use the MAX_STEPS constant, not a hardcoded number."""
         from src.agent import agent as agent_module
 
         original_max = agent_module.MAX_STEPS
-        agent_module.MAX_STEPS = 2  # Override tạm thời
+        agent_module.MAX_STEPS = 2  # Temporary override
 
         tool = _make_tool("query_sql", return_value="ok")
         tc = _make_tool_call("query_sql", {"sql": "SELECT 1"})
@@ -327,23 +327,23 @@ class TestMaxIterations(unittest.TestCase):
         self.assertIn("2", result)
 
     def test_does_not_raise_stop_iteration(self):
-        """Mock responses cạn → không được raise StopIteration ra ngoài."""
+        """Mock responses run out → StopIteration must not escape."""
         from src.agent.agent import MAX_STEPS
 
         tool = _make_tool("query_sql", return_value="ok")
         tc = _make_tool_call("query_sql", {"sql": "SELECT 1"})
-        # Chỉ cho MAX_STEPS - 1 responses, lần cuối sẽ gây StopIteration
+        # Only MAX_STEPS - 1 responses, so the last call raises StopIteration
         llm = _build_llm([_make_response(tool_calls=[tc])] * (MAX_STEPS - 1))
         with _patch_groq(llm):
             from src.agent.agent import create_analyst_agent
 
             agent = create_analyst_agent([tool])
-        # Không được raise exception
+        # Must not raise an exception
         try:
             result = agent("test stop iteration")
             self.assertIsInstance(result, str)
         except StopIteration:
-            self.fail("StopIteration không được lan ra ngoài run_agent()")
+            self.fail("StopIteration must not propagate out of run_agent()")
 
 
 class TestRateLimitRetry(unittest.TestCase):
@@ -355,9 +355,9 @@ class TestRateLimitRetry(unittest.TestCase):
             from src.agent.agent import create_analyst_agent
 
             agent = create_analyst_agent([])
-        result = agent("bất kỳ câu hỏi nào")
+        result = agent("any question at all")
         lower = result.lower()
-        self.assertTrue("rate limit" in lower or "groq" in lower or "thử lại" in lower)
+        self.assertTrue("rate limit" in lower or "groq" in lower or "try again" in lower)
 
     def test_rate_limit_message_is_not_empty(self):
         llm = _build_llm([RetryError()])
@@ -371,7 +371,7 @@ class TestRateLimitRetry(unittest.TestCase):
 
 
 class TestIsRateLimitError(unittest.TestCase):
-    """_is_rate_limit_error phải nhận diện đúng các loại exception."""
+    """_is_rate_limit_error must correctly recognise each exception type."""
 
     def setUp(self):
         from src.agent.agent import _is_rate_limit_error
@@ -397,11 +397,11 @@ class TestIsRateLimitError(unittest.TestCase):
         self.assertFalse(self.fn(RuntimeError("db error")))
 
     def test_keyboard_interrupt_returns_false(self):
-        """KeyboardInterrupt không được retry."""
+        """KeyboardInterrupt must not be retried."""
         self.assertFalse(self.fn(KeyboardInterrupt()))
 
     def test_system_exit_returns_false(self):
-        """SystemExit không được retry."""
+        """SystemExit must not be retried."""
         self.assertFalse(self.fn(SystemExit(0)))
 
 
@@ -426,7 +426,7 @@ class TestFallbackXmlParsing(unittest.TestCase):
         self.assertEqual(args, {})
 
     def test_no_space_before_brace(self):
-        """Groq đôi khi không có khoảng trắng giữa tên function và '{'."""
+        """Groq sometimes omits the space between the function name and '{'."""
         err = '<function=query_sql{"sql": "SELECT 1"}</function>'
         name, args = self.fn(err)
         self.assertEqual(name, "query_sql")
@@ -454,17 +454,17 @@ class TestFallbackXmlParsing(unittest.TestCase):
         self.assertIsNone(args)
 
     def test_tool_executed_from_exception(self):
-        """Full flow: exception với XML → tool được chạy → LLM tổng hợp."""
+        """Full flow: exception with XML → tool is run → LLM summarises."""
         tool = _make_tool("query_sql", return_value="rows: 3")
         xml_err = Exception(
             '<function=query_sql {"sql": "SELECT COUNT(*) FROM sales"} </function>'
         )
-        llm = _build_llm([xml_err, _make_response(content="Có 3 hàng.")])
+        llm = _build_llm([xml_err, _make_response(content="There are 3 rows.")])
         with _patch_groq(llm):
             from src.agent.agent import create_analyst_agent
 
             agent = create_analyst_agent([tool])
-        result = agent("đếm hàng trong sales")
+        result = agent("count rows in sales")
         tool.invoke.assert_called_once()
         self.assertIn("3", result)
 
@@ -481,7 +481,7 @@ class TestFallbackXmlParsing(unittest.TestCase):
 
 
 class TestToolException(unittest.TestCase):
-    """tool.invoke() raise exception → agent không crash, trả error message."""
+    """tool.invoke() raises → agent does not crash, returns an error message."""
 
     def test_tool_exception_handled_gracefully(self):
         broken_tool = MagicMock()
@@ -492,19 +492,19 @@ class TestToolException(unittest.TestCase):
         llm = _build_llm(
             [
                 _make_response(tool_calls=[tc]),
-                _make_response(content="Có lỗi xảy ra."),
+                _make_response(content="An error occurred."),
             ]
         )
         with _patch_groq(llm):
             from src.agent.agent import create_analyst_agent
 
             agent = create_analyst_agent([broken_tool])
-        result = agent("query bị lỗi")
+        result = agent("failing query")
         self.assertIsInstance(result, str)
         self.assertTrue(result)
 
     def test_tool_exception_error_passed_to_llm(self):
-        """Lỗi từ tool phải được gửi cho LLM dưới dạng ToolMessage."""
+        """A tool error must be sent to the LLM as a ToolMessage."""
         broken_tool = MagicMock()
         broken_tool.name = "query_sql"
         broken_tool.invoke.side_effect = ValueError("invalid query")
@@ -513,7 +513,7 @@ class TestToolException(unittest.TestCase):
         llm = _build_llm(
             [
                 _make_response(tool_calls=[tc]),
-                _make_response(content="Có lỗi."),
+                _make_response(content="Error."),
             ]
         )
         with _patch_groq(llm):
@@ -533,7 +533,7 @@ class TestToolException(unittest.TestCase):
 
 
 class TestApiError(unittest.TestCase):
-    """LLM raise generic Exception → agent trả error message không crash."""
+    """LLM raises a generic Exception → agent returns an error message without crashing."""
 
     def test_api_error_returns_error_string(self):
         llm = _build_llm([Exception("connection timeout")])
@@ -552,7 +552,7 @@ class TestApiError(unittest.TestCase):
 
             agent = create_analyst_agent([])
         result = agent("test")
-        # Phải có gì đó thông báo lỗi
+        # There must be some error message
         self.assertIsInstance(result, str)
         self.assertTrue(result.strip())
 
