@@ -37,3 +37,6 @@ logs/
 *.log
 
 get-pip.py
+# Personal notes
+prep.txt
+summary-nsql.txt

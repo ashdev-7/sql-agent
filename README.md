@@ -16,7 +16,7 @@ You:   What was the weather when the accident happened?
 Agent: 31.8 °C, cloudy, 2.1 mm of rain, 82 % humidity, moderate air quality.
 ```
 
-If AWS credentials are set (see [Configuration](https://github.com/ashdev-7/sql-agent/blob/main/data-analyst-agent-main/README.md#configuration)), the agent automatically switches to the **SmartCity pipeline** dataset (vehicle, weather, emergency data on S3) instead of the local sample warehouse — same interface, no code change needed:
+If AWS credentials are set (see [Configuration](#configuration)), the agent automatically switches to the **SmartCity pipeline** dataset (vehicle, weather, emergency data on S3) instead of the local sample warehouse — same interface, no code change needed:
 
 ```text
 You:   What is the average speed of electric vehicles today?
@@ -40,7 +40,7 @@ Agent: 78.3 km/h average across today's electric vehicle trips (date=2026-06-17)
 ## Project structure
 
 ```text
-data-analyst-agent/
+sql-agent/
 ├── src/
 │   ├── agent/
 │   │   └── agent.py          # LangChain agentic loop + Groq integration
@@ -50,7 +50,7 @@ data-analyst-agent/
 │   └── logging_config.py     # JSON structured logger
 ├── tests/
 │   ├── conftest.py            # stubs for all external deps (no live services needed)
-│   ├── test_agent.py          # 43 cases — agent loop, retry, fallback XML
+│   ├── test_agent.py          # 44 cases — agent loop, retry, fallback XML
 │   ├── test_sql_tool.py       # 40 cases — sanitize, S3/local conn lifecycle, overflow rewrite
 │   └── test_logging_config.py # 26 cases — JsonFormatter, extra fields, LOG_LEVEL
 ├── data/sample/
@@ -68,7 +68,7 @@ data-analyst-agent/
 
 ```bash
 git clone https://github.com/ashdev-7/sql-agent.git
-cd data-analyst-agent-main
+cd sql-agent
 pip install -e .
 ```
 
@@ -85,7 +85,7 @@ GROQ_MODEL=openai/gpt-oss-120b
 LOG_LEVEL=INFO
 ```
 
-Leave `AWS_ACCESS_KEY` / `AWS_SECRET_KEY` / `AWS_BUCKET_NAME` unset to run in local mode (sample sales data, auto-seeded). Fill them in to point the agent at the SmartCity S3 pipeline instead — see [Configuration](https://github.com/ashdev-7/sql-agent/blob/main/data-analyst-agent-main/README.md#configuration).
+Leave `AWS_ACCESS_KEY` / `AWS_SECRET_KEY` / `AWS_BUCKET_NAME` unset to run in local mode (SmartCity sample data, auto-seeded). Fill them in to point the agent at the SmartCity S3 pipeline instead — see [Configuration](#configuration).
 
 ### 3. Run
 
@@ -98,7 +98,7 @@ python main.py
 ## Run tests
 
 ```bash
-# All 109 tests — no live services or API keys needed
+# All 110 tests — no live services or API keys needed
 pytest tests/ -v
 
 # With coverage
@@ -131,7 +131,7 @@ When all three AWS vars are present, the agent connects via DuckDB's `httpfs` ex
 * Connect to SmartCity pipeline (S3 Parquet via DuckDB httpfs)
 * Groq rate-limit retry with tenacity
 * JSON structured logging
-* 109 unit tests, CI on GitHub Actions
+* 110 unit tests, CI on GitHub Actions
 * File ingestion tool (CSV, Parquet upload)
 * Streamlit web UI
 
@@ -139,4 +139,4 @@ When all three AWS vars are present, the agent connects via DuckDB's `httpfs` ex
 
 ## License
 
-MIT — see [LICENSE](https://github.com/ashdev-7/sql-agent/blob/main/data-analyst-agent-main/LICENSE).
+MIT
